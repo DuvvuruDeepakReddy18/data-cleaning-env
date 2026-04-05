@@ -1,0 +1,123 @@
+name: data_cleaning_env
+version: "1.0.0"
+description: >-
+  A comprehensive real-world data cleaning environment for training and evaluating
+  reinforcement learning agents on practical tabular data correction tasks.
+  Features datasets with realistic corruption patterns including missing values,
+  inconsistent formatting, duplicates, type mismatches, and logical errors.
+
+tags:
+  - data-cleaning
+  - tabular-data
+  - reinforcement-learning
+  - evaluation
+  - real-world
+  - agent-training
+
+author:
+  name: "Deepak"
+  email: "cprasiraju@gmail.com"
+
+license: MIT
+
+huggingface_space: "https://huggingface.co/spaces/Deepak1819/data-cleaning-env"
+
+action: DataCleanAction
+action_space:
+  type: "discrete"
+  description: "Actions for cleaning tabular data"
+  parameters:
+    - name: "action_type"
+      type: "string"
+      description: "Type of cleaning operation"
+      options:
+        - "fix_cell"
+        - "delete_row"
+        - "mark_complete"
+    - name: "row"
+      type: "integer"
+      description: "Target row index (0-based)"
+    - name: "column"
+      type: "string"
+      description: "Target column name (for fix_cell)"
+    - name: "value"
+      type: "string"
+      description: "New value for the cell (for fix_cell)"
+    - name: "reason"
+      type: "string"
+      description: "Optional explanation for the action"
+
+observation: DataCleanObservation
+observation_space:
+  type: "dict"
+  description: "Rich observation with tabular data, quality metrics, and issue tracking"
+  fields:
+    - name: "data_snapshot"
+      type: "string"
+      description: "Current dataset as CSV string"
+    - name: "columns"
+      type: "list"
+      description: "Column names in the dataset"
+    - name: "num_rows"
+      type: "integer"
+      description: "Current number of rows"
+    - name: "quality_score"
+      type: "float"
+      description: "Data quality score from 0.0 to 1.0"
+    - name: "issues_detected"
+      type: "list"
+      description: "Remaining data quality issues"
+    - name: "data_profile"
+      type: "dict"
+      description: "Per-column statistics (nulls, uniques, types)"
+    - name: "issue_categories"
+      type: "dict"
+      description: "Count of issues by category (formatting, missing, logical, etc.)"
+    - name: "progress_pct"
+      type: "float"
+      description: "Percentage of issues fixed (0-100)"
+    - name: "difficulty"
+      type: "string"
+      description: "Task difficulty level (easy/medium/hard)"
+
+reward_range: [0.0, 1.0]
+reward_description: >-
+  Reward combines step-level progress signal with final quality bonus.
+  Includes streak bonus for consecutive improvements, diminishing returns
+  penalty for failed actions, efficiency bonus for fewer steps, and
+  perfect cleaning bonus (score >= 0.99).
+
+episode:
+  max_steps:
+    easy: 40
+    medium: 60
+    hard: 80
+
+tasks:
+  - name: "easy_customer_contacts"
+    difficulty: "easy"
+    description: "Clean a 10-row customer contact list with whitespace, capitalization, date format, and email issues"
+    max_steps: 40
+    metrics: ["quality_score"]
+
+  - name: "medium_product_inventory"
+    difficulty: "medium"
+    description: "Clean a 15-row product inventory with missing values, type mismatches, category inconsistencies, and invalid ranges"
+    max_steps: 60
+    metrics: ["quality_score"]
+
+  - name: "hard_sales_reconciliation"
+    difficulty: "hard"
+    description: "Reconcile 20 sales records with duplicates, logical inconsistencies, cross-field validation, and date ordering violations"
+    max_steps: 80
+    metrics: ["quality_score"]
+
+evaluation_metrics:
+  - "quality_score": "Cell-by-cell correctness vs gold standard (0-1)"
+  - "reward": "Shaped reward combining progress, efficiency, and bonuses (0-1)"
+
+metadata:
+  submission_type: "Meta PyTorch OpenEnv Hackathon"
+  framework: "PyTorch"
+  environment_type: "Tabular Data Cleaning"
+  agent_compatible: true
