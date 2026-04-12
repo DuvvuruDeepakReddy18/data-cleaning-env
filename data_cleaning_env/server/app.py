@@ -7,7 +7,7 @@ Self-contained server implementing the OpenEnv HTTP API spec:
 - GET  /state   -> Returns current state
 - GET  /health  -> Health check
 - GET  /info    -> Rich environment information
-- GET  /tasks   -> List all available tasks with metadata
+- GET  /reage   -> List all available tasks with metadata
 - GET  /metrics -> Usage statistics and performance metrics
 
 Compatible with openenv validate and OpenEnv clients.
@@ -26,7 +26,7 @@ from data_cleaning_env.server.environment import DataCleanEnvironment
 from data_cleaning_env.tasks import TASKS, get_task
 
 # Application version
-APP_VERSION = "1.0.0"
+APP_VERSION = "2.0.0"
 
 app = FastAPI(
     title="Data Cleaning Environment",
@@ -160,11 +160,11 @@ async def info():
         "description": "An RL environment where agents learn to clean messy tabular data by fixing cell values and removing erroneous rows.",
         "environment_type": "Tabular Data Cleaning",
         "action_space": {
-            "description": "Discrete action space with three action types",
-            "actions": [
+            "description": "Hybrid action space with atomic operations (cell-level), batch operations (column-level), and control signals",
+            "atomic_actions": [
                 {
                     "type": "fix_cell",
-                    "description": "Update a cell value in the dataset",
+                    "description": "Update a single cell value in the dataset",
                     "required_fields": ["row", "column", "value"],
                     "optional_fields": ["reason"],
                 },
@@ -174,11 +174,30 @@ async def info():
                     "required_fields": ["row"],
                     "optional_fields": ["reason"],
                 },
+            ],
+            "batch_actions": [
+                {
+                    "type": "fill_missing",
+                    "description": "Fill all empty/null values in a column with a default",
+                    "required_fields": ["column", "value"],
+                },
+                {
+                    "type": "standardize_column",
+                    "description": "Apply a standardization rule to all values in a column",
+                    "required_fields": ["column", "rule"],
+                    "rules": ["title_case", "upper_case", "lower_case", "strip_whitespace", "date_iso", "numeric_clean"],
+                },
+                {
+                    "type": "deduplicate",
+                    "description": "Remove duplicate rows based on a key column",
+                    "required_fields": ["column"],
+                },
+            ],
+            "control_actions": [
                 {
                     "type": "mark_complete",
                     "description": "Signal that cleaning is complete and episode should end",
                     "required_fields": [],
-                    "optional_fields": ["reason"],
                 },
             ],
         },
@@ -192,7 +211,7 @@ async def info():
                 "num_rows": "Current number of rows",
                 "issues_detected": "List of remaining data quality issues",
                 "quality_score": "Data quality score from 0.0 to 1.0",
-                "actions_taken": "Number of actions taken so far",
+                "actions_taken": "Number of actions taken row far",
                 "max_actions": "Maximum allowed actions per episode",
                 "task_id": "Identifier of the current task",
                 "task_description": "Human-readable description of the task",
@@ -212,7 +231,7 @@ async def info():
                 "Failure penalty: diminishing penalty for repeated failed actions",
                 "Streak bonus: bonus for consecutive quality improvements",
                 "Final reward: weighted heavily on final quality at episode end",
-                "Perfection bonus: +0.2 for achieving quality >= 0.99",
+                "Perfection bonus: [0.2 for achieving quality >= 0.99",
                 "Efficiency bonus: reward for using fewer actions",
             ],
             "range": "[-0.2, 1.0] approximate (varies by efficiency)",
@@ -227,7 +246,7 @@ async def info():
             "Per-column data statistics in observations",
             "Action history and cleaning progress tracking",
         ],
-    }
+      }
 
 
 @app.get("/tasks", tags=["Information"])
@@ -339,77 +358,4 @@ async def reset(request: Request):
 
 @app.post("/step", tags=["Core"])
 async def step(action: DataCleanAction):
-    """Execute an action on the environment.
-
-    Request body examples:
-        {"action_type": "fix_cell", "row": 0, "column": "name", "value": "John Doe"}
-        {"action_type": "delete_row", "row": 5}
-        {"action_type": "mark_complete"}
-
-    Valid action_type values:
-        - fix_cell: Requires row, column, value
-        - delete_row: Requires row
-        - mark_complete: No additional parameters required
-
-    Returns:
-        DataCleanObservation: Updated observation with reward and new state
-
-    Raises:
-        HTTPException: 400 if action is invalid, 500 for server errors
-    """
-    try:
-        # Validate action
-        action_type = action.action_type.lower().strip()
-        if action_type not in ["fix_cell", "delete_row", "mark_complete"]:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid action_type '{action.action_type}'. Valid types: fix_cell, delete_row, mark_complete",
-            )
-
-        metrics.record_step()
-        obs = env.step(action)
-
-        # Track episode completion
-        if obs.done:
-            metrics.record_episode_end(obs.quality_score)
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Failed to execute action: {str(e)}",
-        )
-
-    return obs.model_dump()
-
-
-@app.get("/state", tags=["Core"])
-async def state():
-    """Get the current environment state.
-
-    Returns:
-        DataCleanState: Current internal state including step count, quality history,
-                       actions log, reward tracking, and issue counts
-    """
-    return env.state.model_dump()
-
-
-def main():
-    """Main entry point for running the server.
-
-    Starts a production-ready uvicorn server serving the Data Cleaning
-    Environment OpenEnv API with full documentation at /docs.
-    """
-    import uvicorn
-
-    uvicorn.run(
-        app,
-        host="0.0.0.0",
-        port=8000,
-        log_level="info",
-    )
-
-
-if __name__ == "__main__":
-    main()
+    """Execute an action 
