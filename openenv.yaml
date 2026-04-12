@@ -1,10 +1,13 @@
 name: data_cleaning_env
-version: "1.0.0"
+version: "2.0.0"
 description: >-
-  A comprehensive real-world data cleaning environment for training and evaluating
-  reinforcement learning agents on practical tabular data correction tasks.
-  Features datasets with realistic corruption patterns including missing values,
-  inconsistent formatting, duplicates, type mismatches, and logical errors.
+  A production-ready OpenEnv environment for training and evaluating AI agents on
+  real-world tabular data cleaning tasks. Features 4 progressively challenging tasks
+  across CRM, retail, order management, and financial services domains. Supports both
+  atomic operations (fix_cell, delete_row) and efficient batch operations (fill_missing,
+  standardize_column, deduplicate) that mirror professional data cleaning workflows.
+  Includes rich observations with data profiling, issue categorization, and dense
+  reward signals with progress tracking.
 
 tags:
   - data-cleaning
@@ -13,10 +16,12 @@ tags:
   - evaluation
   - real-world
   - agent-training
+  - financial-data
+  - data-quality
 
 author:
-  name: "Deepak"
-  email: "cprasiraju@gmail.com"
+  name: "TorchNexus Team"
+  email: "duvvuru1deepakreddy@gmail.com"
 
 license: MIT
 
@@ -24,8 +29,8 @@ huggingface_space: "https://huggingface.co/spaces/Deepak1819/data-cleaning-env"
 
 action: DataCleanAction
 action_space:
-  type: "discrete"
-  description: "Actions for cleaning tabular data"
+  type: "hybrid"
+  description: "Hybrid action space with atomic (cell-level) and batch (column-level) operations"
   parameters:
     - name: "action_type"
       type: "string"
@@ -33,16 +38,22 @@ action_space:
       options:
         - "fix_cell"
         - "delete_row"
+        - "fill_missing"
+        - "standardize_column"
+        - "deduplicate"
         - "mark_complete"
     - name: "row"
       type: "integer"
-      description: "Target row index (0-based)"
+      description: "Target row index (0-based, for fix_cell and delete_row)"
     - name: "column"
       type: "string"
-      description: "Target column name (for fix_cell)"
+      description: "Target column name (for fix_cell, fill_missing, standardize_column, deduplicate)"
     - name: "value"
       type: "string"
-      description: "New value for the cell (for fix_cell)"
+      description: "New value (for fix_cell) or default fill value (for fill_missing)"
+    - name: "rule"
+      type: "string"
+      description: "Standardization rule (for standardize_column): title_case, upper_case, lower_case, strip_whitespace, date_iso, numeric_clean"
     - name: "reason"
       type: "string"
       description: "Optional explanation for the action"
@@ -50,7 +61,7 @@ action_space:
 observation: DataCleanObservation
 observation_space:
   type: "dict"
-  description: "Rich observation with tabular data, quality metrics, and issue tracking"
+  description: "Rich observation with tabular data, quality metrics, issue tracking, and data profiling"
   fields:
     - name: "data_snapshot"
       type: "string"
@@ -63,40 +74,48 @@ observation_space:
       description: "Current number of rows"
     - name: "quality_score"
       type: "float"
-      description: "Data quality score from 0.0 to 1.0"
+      description: "Data quality score from 0.0 to 1.0 (cell-by-cell vs gold standard)"
     - name: "issues_detected"
       type: "list"
-      description: "Remaining data quality issues"
+      description: "Remaining data quality issues with row/column references"
     - name: "data_profile"
       type: "dict"
-      description: "Per-column statistics (nulls, uniques, types)"
+      description: "Per-column statistics (null_count, unique_count, sample_values, inferred_type)"
     - name: "issue_categories"
       type: "dict"
-      description: "Count of issues by category (formatting, missing, logical, etc.)"
+      description: "Count of issues by category (formatting, missing_values, duplicates, logical_errors, type_errors)"
     - name: "progress_pct"
       type: "float"
       description: "Percentage of issues fixed (0-100)"
     - name: "difficulty"
       type: "string"
-      description: "Task difficulty level (easy/medium/hard)"
+      description: "Task difficulty level (easy/medium/hard/expert)"
+    - name: "cells_changed"
+      type: "integer"
+      description: "Total cells modified so far"
+    - name: "rows_deleted"
+      type: "integer"
+      description: "Total rows deleted so far"
 
 reward_range: [0.0, 1.0]
 reward_description: >-
-  Reward combines step-level progress signal with final quality bonus.
-  Includes streak bonus for consecutive improvements, diminishing returns
-  penalty for failed actions, efficiency bonus for fewer steps, and
-  perfect cleaning bonus (score >= 0.99).
+  Multi-signal reward combining: (1) progress reward proportional to quality improvement,
+  (2) step delta reward for immediate quality changes, (3) streak bonus for consecutive
+  improvements, (4) efficiency bonus for fewer actions, (5) batch operation bonus for
+  smart tool usage, (6) diminishing penalty for failed actions, and (7) tiered final
+  bonuses at 0.90/0.95/0.99 quality thresholds.
 
 episode:
   max_steps:
     easy: 40
     medium: 60
     hard: 80
+    expert: 100
 
 tasks:
   - name: "easy_customer_contacts"
     difficulty: "easy"
-    description: "Clean a 10-row customer contact list with whitespace, capitalization, date format, and email issues"
+    description: "Clean a 10-row CRM contact list with whitespace, capitalization, date format, and email issues"
     max_steps: 40
     metrics: ["quality_score"]
 
@@ -108,8 +127,14 @@ tasks:
 
   - name: "hard_sales_reconciliation"
     difficulty: "hard"
-    description: "Reconcile 20 sales records with duplicates, logical inconsistencies, cross-field validation, and date ordering violations"
+    description: "Reconcile 20 sales records with duplicates, cross-field arithmetic validation, temporal constraints, and date ordering violations"
     max_steps: 80
+    metrics: ["quality_score"]
+
+  - name: "expert_financial_records"
+    difficulty: "expert"
+    description: "Clean 25 financial transaction records with duplicate detection, temporal anomalies, currency standardization, cross-row entity resolution, and regulatory compliance requirements"
+    max_steps: 100
     metrics: ["quality_score"]
 
 evaluation_metrics:
@@ -121,3 +146,8 @@ metadata:
   framework: "PyTorch"
   environment_type: "Tabular Data Cleaning"
   agent_compatible: true
+  domains:
+    - "Customer Relationship Management"
+    - "Retail / E-commerce"
+    - "Order Management"
+    - "Financial Services / AML Compliance"
